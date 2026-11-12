@@ -1,0 +1,47 @@
+# CI: on every pull request and every push to main, install the project on a clean Linux
+# machine and run all the checks. Branch protection on main requires this job to pass.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# The token GitHub gives this workflow can only read the repository (least privilege).
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the run still in progress, to save CI minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    # A fixed image instead of ubuntu-latest, so the machine does not change under our feet.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # Actions are pinned by full commit hash: a tag like v7 can be moved, a hash cannot.
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # we never push from CI, so do not keep the token on disk
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7" # same uv as on the development laptop
+          enable-cache: true # reuse downloaded packages between runs (keyed on uv.lock)
+
+      - name: Install the project from the lockfile
+        run: uv sync --locked # fails if uv.lock no longer matches pyproject.toml
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Check formatting
+        run: uv run ruff format --check .
+
+      - name: Run tests
+        run: uv run pytest
