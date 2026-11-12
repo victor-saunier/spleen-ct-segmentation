@@ -4,9 +4,10 @@ INTERVIEW_PREP.md
 
 # --- Data, outputs and model weights: never committed ---
 # The dataset license (CC BY-SA 4.0) and size (1.6 GB) mean we download it, never redistribute it.
-data/
-outputs/
-runs/
+# The leading "/" matches only the folder at the repository root, not any folder with that name.
+/data/
+/outputs/
+/runs/
 *.nii
 *.nii.gz
 *.tar
