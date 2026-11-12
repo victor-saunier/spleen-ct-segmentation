@@ -18,8 +18,14 @@ spleen. This is binary semantic segmentation.
 
 - **Source:** [Medical Segmentation Decathlon](http://medicaldecathlon.com/), Task09 Spleen:
   61 CT volumes from Memorial Sloan Kettering Cancer Center (41 training + 20 testing).
-  Only the 41 training volumes have labels, so only these are used here, split into
-  train / validation / test by patient.
+  Only the 41 training volumes have labels, so only these are used here.
+- **Labels:** per the dataset paper, the spleen was segmented semi-automatically, then the
+  contours were adjusted by an expert abdominal radiologist.
+- **Split:** 27 train / 7 validation / 7 test, **by case**, with a fixed seed, committed in
+  [splits/split.json](splits/split.json) before any training.
+  The dataset ships no patient IDs, and its source study imaged patients before and after
+  chemotherapy, so a patient-level split **cannot be guaranteed**: two cases might be the
+  same person. See [decision record 0001](docs/decisions/0001-case-level-split.md).
 - **License:** [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/), as stated on the
   official site. The data is **not** included in this repository.
 - **Citation:**
@@ -38,11 +44,18 @@ None yet.
 
 ## Reproduce
 
-To be written.
+```bash
+uv sync                               # install the exact locked environment
+uv run python -m spleenseg.download   # ~1.6 GB into data/ (git-ignored), MD5-verified
+uv run python -m spleenseg.split      # rewrites splits/split.json; must equal the committed file
+uv run pytest                         # data checks run only when data/ is present
+```
 
 ## Limitations
 
-To be written.
+- **Case-level split:** separating patients cannot be guaranteed (see Data above). If some
+  cases are repeat scans of one person, test scores could be optimistic.
+- More to be written as results come in.
 
 ## License
 
