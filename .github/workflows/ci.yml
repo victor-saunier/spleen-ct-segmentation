@@ -27,6 +27,22 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false # we never push from CI, so do not keep the token on disk
+          fetch-depth: 0 # full history, needed by the secret scan below
+
+      # The pre-commit hook only scans staged changes, on laptops where it is installed.
+      # This scans every commit in the history, so it catches anything that slipped past.
+      - name: Scan the full git history for secrets
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          # Official checksum from the gitleaks release page: proves the download was not altered.
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sSfL -o gitleaks.tar.gz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum --check
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git --redact --verbose "$GITHUB_WORKSPACE"
 
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
