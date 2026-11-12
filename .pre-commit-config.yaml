@@ -1,0 +1,21 @@
+# Checks that git runs automatically before every commit. If one fails, the commit is blocked.
+# Install the hook once per clone with: uv run pre-commit install
+# Every `rev` is pinned so all machines run exactly the same checks.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4 # keep equal to the ruff version pinned in pyproject.toml
+    hooks:
+      - id: ruff-check # lint; --fix repairs what it safely can, then you re-stage
+        args: [--fix]
+      - id: ruff-format # rewrite code layout to the project style
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks # block commits that contain something looking like a secret
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files # block CT volumes or weights committed by mistake
+        args: [--maxkb=500]
