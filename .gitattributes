@@ -1,0 +1,3 @@
+# Store every text file with LF line endings, even when edited on Windows (which uses CRLF).
+# CI runs on Linux: without this, format checks and diffs would see every line as changed.
+* text=auto eol=lf
