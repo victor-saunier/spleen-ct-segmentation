@@ -1,0 +1,39 @@
+# --- Personal notes: never committed ---
+CLAUDE.md
+INTERVIEW_PREP.md
+
+# --- Data, outputs and model weights: never committed ---
+# The dataset license (CC BY-SA 4.0) and size (1.6 GB) mean we download it, never redistribute it.
+data/
+outputs/
+runs/
+*.nii
+*.nii.gz
+*.tar
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# --- Secrets and local environment ---
+.env
+.env.*
+
+# --- Python build and tool caches ---
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# --- OS and editor files ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
