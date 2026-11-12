@@ -13,6 +13,7 @@ dependencies = []
 [dependency-groups]
 # Tools for development only, not needed to use the package.
 dev = [
+    "mypy>=2.4.1",
     "pre-commit>=4.7",
     "pytest>=9.2",
     "ruff==0.17.4", # exact pin: must equal the ruff rev in .pre-commit-config.yaml
@@ -34,6 +35,13 @@ target-version = "py312"
 # E/F: real errors (syntax, undefined names, unused imports), I: import order,
 # B: common bug patterns, UP: modern Python syntax.
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["src", "tests"]
+# Every function must declare its types, so the type hints are checked, not just decoration.
+disallow_untyped_defs = true
+warn_unused_ignores = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
