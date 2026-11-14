@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 import torch
 
-from spleenseg.transforms import preprocessing
+from spleenseg.transforms import preprocessing, train_transforms
 
 # Synthetic case: 40 x 40 x 10 voxels of 0.75 x 0.75 x 5 mm, like a thick-slice scan.
 SOURCE_SPACING = (0.75, 0.75, 5.0)
@@ -52,3 +52,29 @@ def test_preprocessing_crops_the_air_around_the_body(case: dict[str, str]) -> No
     image = preprocessing(spacing=(1.5, 1.5, 2.0))(case)["image"]
     # Full width would be 40 * 0.75 / 1.5 = 20 voxels; the body spans only 24 * 0.75 / 1.5 = 12.
     assert image.shape[1:3] == (12, 12)
+
+
+def test_training_gives_patches_of_the_requested_size(case: dict[str, str]) -> None:
+    # The synthetic case is only 12 x 12 x 25 voxels after preprocessing: padding must kick in.
+    patches = train_transforms(patch_size=(16, 16, 16), num_samples=3)(case)
+    assert len(patches) == 3
+    for patch in patches:
+        assert patch["image"].shape == (1, 16, 16, 16)
+        assert patch["label"].shape == (1, 16, 16, 16)
+
+
+def test_training_keeps_the_mask_binary_after_augmentation(case: dict[str, str]) -> None:
+    pipeline = train_transforms(patch_size=(16, 16, 16), num_samples=8)
+    pipeline.set_random_state(seed=0)
+    for patch in pipeline(case):
+        assert set(torch.unique(patch["label"]).tolist()) <= {0.0, 1.0}
+
+
+def test_training_is_reproducible_with_a_seed(case: dict[str, str]) -> None:
+    def run() -> list[torch.Tensor]:
+        pipeline = train_transforms(patch_size=(16, 16, 16), num_samples=4)
+        pipeline.set_random_state(seed=123)
+        return [patch["image"] for patch in pipeline(case)]
+
+    for first, second in zip(run(), run(), strict=True):
+        assert torch.equal(first, second)
