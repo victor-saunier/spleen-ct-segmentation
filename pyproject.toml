@@ -8,7 +8,11 @@ license-files = ["LICENSE"]
 authors = [{ name = "Victor Saunier" }]
 # 3.12 only: the version range supported by PyTorch, MONAI and ONNX Runtime at the same time.
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "monai>=1.6.1",
+    "nibabel>=5.5",
+    "torch>=2.15",
+]
 
 [dependency-groups]
 # Tools for development only, not needed to use the package.
@@ -22,6 +26,28 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.13.7,<0.14"]
 build-backend = "uv_build"
+
+# PyTorch publishes one build per hardware target on its own package index.
+# Windows laptop (RTX 4060): CUDA 13.2 build. Linux (CI, Docker): the much smaller CPU build.
+[[tool.uv.index]]
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
+explicit = true # only used for packages that ask for it below
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu132", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+[tool.uv]
+# Only resolve for the two platforms this project runs on.
+environments = ["sys_platform == 'win32'", "sys_platform == 'linux'"]
 
 [tool.uv.build-backend]
 # The import name (`import spleenseg`) differs from the project name, so we state it.
