@@ -9,6 +9,7 @@ authors = [{ name = "Victor Saunier" }]
 # 3.12 only: the version range supported by PyTorch, MONAI and ONNX Runtime at the same time.
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "matplotlib>=3.11.2",
     "monai>=1.6.1",
     "nibabel>=5.5",
     "torch>=2.15",
