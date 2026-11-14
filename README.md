@@ -36,7 +36,12 @@ spleen. This is binary semantic segmentation.
 
 ## Method
 
-To be written.
+- **Preprocessing** (all cases): RAS orientation, resampling to 1.5 x 1.5 x 2.0 mm, intensity
+  window -40 to 180 HU rescaled to [0, 1], crop to the body. Values come from statistics of the
+  training cases only, see [decision record 0002](docs/decisions/0002-preprocessing.md).
+- **Training input:** 96^3 patches, centred on spleen or body tissue with equal probability,
+  with small rotation, zoom and intensity augmentations; no left-right flip.
+- Models and training: to be written.
 
 ## Results
 
@@ -48,6 +53,8 @@ None yet.
 uv sync                               # install the exact locked environment
 uv run python -m spleenseg.download   # ~1.6 GB into data/ (git-ignored), MD5-verified
 uv run python -m spleenseg.split      # rewrites splits/split.json; must equal the committed file
+uv run python -m spleenseg.stats      # training-set statistics behind the preprocessing choices
+uv run python -m spleenseg.preview    # outputs/preview_<case>.png, one training case
 uv run pytest                         # data checks run only when data/ is present
 ```
 
