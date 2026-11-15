@@ -42,6 +42,11 @@ spleen. This is binary semantic segmentation.
 - **Training input:** 96^3 patches, centred on spleen or body tissue with equal probability,
   with small rotation, zoom and intensity augmentations; no left-right flip.
 - Models and training: to be written.
+- **Evaluation:** per case, at the original resolution: Dice (overlap) and HD95 (95th-percentile
+  border distance in mm, MONAI's definition). Mean, standard deviation and a 95 % percentile
+  bootstrap interval; models are compared with a bootstrap of their per-case differences. An
+  empty prediction gives Dice 0 and an undefined HD95, counted separately. The test set is used
+  once. See [decision record 0003](docs/decisions/0003-evaluation.md).
 
 ## Results
 
@@ -55,6 +60,7 @@ uv run python -m spleenseg.download   # ~1.6 GB into data/ (git-ignored), MD5-ve
 uv run python -m spleenseg.split      # rewrites splits/split.json; must equal the committed file
 uv run python -m spleenseg.stats      # training-set statistics behind the preprocessing choices
 uv run python -m spleenseg.preview    # outputs/preview_<case>.png, one training case
+uv run python -m spleenseg.evaluate --pred-dir <predicted masks>   # validation by default
 uv run pytest                         # data checks run only when data/ is present
 ```
 
