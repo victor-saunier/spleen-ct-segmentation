@@ -26,7 +26,7 @@ DEFAULT_DATASET_DIR = Path("data/Task09_Spleen")
 DEFAULT_SPLIT_FILE = Path("splits/split.json")
 
 
-def _git_commit() -> str:
+def git_commit() -> str:
     """Commit of the code that produced the numbers, marked "+dirty" if files were edited."""
 
     def git(*args: str) -> str:
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> None:
         "dice": _summary([r["dice"] for r in rows]),
         "hd95_mm": _summary([r["hd95_mm"] for r in rows]),
         "command": " ".join(sys.argv),
-        "git_commit": _git_commit(),
+        "git_commit": git_commit(),
     }
     out_dir = args.out_dir or Path("outputs/eval") / f"{args.pred_dir.name}-{args.split}"
     out_dir.mkdir(parents=True, exist_ok=True)
