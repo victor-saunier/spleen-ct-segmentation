@@ -8,7 +8,7 @@ import torch
 from monai.metrics import compute_hausdorff_distance
 from scipy import ndimage
 
-from spleenseg.metrics import dice, hd95
+from spleenseg.metrics import bootstrap_ci, dice, hd95
 
 
 def cube(z_start: int, x_start: int = 2, size: int = 4) -> np.ndarray:
@@ -65,3 +65,26 @@ def test_hd95_matches_monai(seed: int) -> None:
         spacing=spacing,
     ).item()
     assert hd95(pred, truth, spacing) == pytest.approx(expected, rel=1e-6)
+
+
+def test_bootstrap_of_identical_values_collapses_to_that_value() -> None:
+    assert bootstrap_ci([0.9] * 7) == pytest.approx((0.9, 0.9, 0.9))
+
+
+def test_bootstrap_interval_contains_the_mean_and_is_reproducible() -> None:
+    values = [0.95, 0.93, 0.96, 0.70, 0.94, 0.91, 0.97]
+    mean, low, high = bootstrap_ci(values, seed=0)
+    assert low < mean < high
+    assert mean == pytest.approx(float(np.mean(values)))
+    assert bootstrap_ci(values, seed=0) == (mean, low, high)
+
+
+def test_bootstrap_interval_widens_with_spread() -> None:
+    _, low_a, high_a = bootstrap_ci([0.90, 0.91, 0.92, 0.93])
+    _, low_b, high_b = bootstrap_ci([0.60, 0.80, 0.95, 0.99])
+    assert high_b - low_b > high_a - low_a
+
+
+def test_bootstrap_refuses_missing_values() -> None:
+    with pytest.raises(ValueError):
+        bootstrap_ci([0.9, math.nan])
