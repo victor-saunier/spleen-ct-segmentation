@@ -12,6 +12,7 @@ dependencies = [
     "matplotlib>=3.11.2",
     "monai>=1.6.1",
     "nibabel>=5.5",
+    "scipy>=1.18.1",
     "torch>=2.15",
 ]
 
@@ -69,6 +70,11 @@ files = ["src", "tests"]
 # Every function must declare its types, so the type hints are checked, not just decoration.
 disallow_untyped_defs = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+# SciPy ships no type information; the tests cover every call into it.
+module = ["scipy.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
