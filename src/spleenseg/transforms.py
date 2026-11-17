@@ -23,17 +23,27 @@ PATCH_SIZE = (96, 96, 96)
 
 
 def preprocessing(
-    spacing: Sequence[float] = SPACING_MM, hu_window: tuple[float, float] = HU_WINDOW
+    spacing: Sequence[float] = SPACING_MM,
+    hu_window: tuple[float, float] = HU_WINDOW,
+    keys: Sequence[str] = KEYS,
 ) -> mt.Compose:
-    """Deterministic steps applied to every case: train, validation and test."""
+    """Deterministic steps applied to every case: train, validation and test.
+
+    keys=("image",) preprocesses a scan without its label, as for prediction. The crop box is
+    computed from the image alone, so the grid is the same with or without the label.
+    """
     return mt.Compose(
         [
-            mt.LoadImaged(keys=KEYS),
-            mt.EnsureChannelFirstd(keys=KEYS),
+            mt.LoadImaged(keys=keys),
+            mt.EnsureChannelFirstd(keys=keys),
             # labels=None: read the axis convention from the image metadata (MONAI's new default).
-            mt.Orientationd(keys=KEYS, axcodes="RAS", labels=None),
+            mt.Orientationd(keys=keys, axcodes="RAS", labels=None),
             # Smooth interpolation for the image; nearest neighbour keeps the mask strictly 0/1.
-            mt.Spacingd(keys=KEYS, pixdim=spacing, mode=("bilinear", "nearest")),
+            mt.Spacingd(
+                keys=keys,
+                pixdim=spacing,
+                mode=["bilinear" if key == "image" else "nearest" for key in keys],
+            ),
             mt.ScaleIntensityRanged(
                 keys="image",
                 a_min=hu_window[0],
@@ -44,7 +54,7 @@ def preprocessing(
             ),
             # Crop to the box around everything brighter than the window's lower bound, which
             # removes the air around the patient.
-            mt.CropForegroundd(keys=KEYS, source_key="image"),
+            mt.CropForegroundd(keys=keys, source_key="image"),
         ]
     )
 
