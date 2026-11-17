@@ -18,6 +18,7 @@ import csv
 import json
 import platform
 import time
+from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -46,7 +47,29 @@ def build_model(cfg: TrainConfig) -> nn.Module:
     raise ValueError(f"Unknown architecture {cfg.architecture!r}")
 
 
-@torch.no_grad()  # no gradients while measuring: faster, less memory
+@torch.no_grad()  # no gradients when only predicting: faster, less memory
+def segment(
+    model: nn.Module,
+    images: torch.Tensor,
+    patch_size: Sequence[int],
+    device: torch.device,
+    use_amp: bool,
+) -> torch.Tensor:
+    """Predicted class of every voxel, (batch, 1, X, Y, Z), for whole preprocessed volumes.
+
+    Shared by checkpoint selection and predict.py, so both always predict the same way.
+    The model must already be in eval mode.
+    """
+    with torch.autocast(device.type, enabled=use_amp):
+        # The whole volume is too big for one pass: predict overlapping windows and blend them.
+        logits = sliding_window_inference(
+            images.to(device), patch_size, sw_batch_size=4, predictor=model
+        )
+    assert isinstance(logits, torch.Tensor)  # our models return one tensor
+    # The predicted class is the larger of the two scores: no threshold to tune.
+    return logits.argmax(dim=1, keepdim=True)
+
+
 def selection_dice(
     model: nn.Module, loader: DataLoader, cfg: TrainConfig, device: torch.device, use_amp: bool
 ) -> float:
@@ -54,15 +77,8 @@ def selection_dice(
     model.eval()
     scores = []
     for batch in loader:
-        with torch.autocast(device.type, enabled=use_amp):
-            # The whole volume is too big for one pass: predict overlapping 96^3 windows and blend.
-            logits = sliding_window_inference(
-                batch["image"].to(device), cfg.patch_size, sw_batch_size=4, predictor=model
-            )
-        assert isinstance(logits, torch.Tensor)  # our models return one tensor
-        # The predicted class is the larger of the two scores: no threshold to tune.
-        prediction = logits.argmax(dim=1)[0].cpu().numpy()
-        scores.append(dice(prediction, batch["label"][0, 0].numpy()))
+        prediction = segment(model, batch["image"], cfg.patch_size, device, use_amp)
+        scores.append(dice(prediction[0, 0].cpu().numpy(), batch["label"][0, 0].numpy()))
     return float(np.mean(scores))
 
 

@@ -48,6 +48,12 @@ def test_preprocessing_keeps_the_mask_binary_and_its_volume(case: dict[str, str]
     assert volume_mm3 == pytest.approx(SPLEEN_MM3, rel=0.25)
 
 
+def test_preprocessing_the_image_alone_gives_the_same_image(case: dict[str, str]) -> None:
+    # Prediction reads no label: it must still see exactly what training and selection saw.
+    alone = preprocessing(keys=("image",))({"image": case["image"]})["image"]
+    assert torch.equal(alone, preprocessing()(case)["image"])
+
+
 def test_preprocessing_crops_the_air_around_the_body(case: dict[str, str]) -> None:
     image = preprocessing(spacing=(1.5, 1.5, 2.0))(case)["image"]
     # Full width would be 40 * 0.75 / 1.5 = 20 voxels; the body spans only 24 * 0.75 / 1.5 = 12.
