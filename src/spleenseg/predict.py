@@ -8,6 +8,10 @@ Only the image is read: the label never touches prediction. The model predicts o
 preprocessed grid; the mask is then put back on the scan's own grid by undoing the geometric
 preprocessing steps (crop, resampling, orientation) in reverse order, and saved with the scan's
 own header, so evaluate.py compares it voxel by voxel with the original label.
+
+Only the largest connected piece of the mask is kept (--keep-all-pieces turns this off): every
+training label holds one spleen in one piece, so smaller pieces are false detections. This
+assumes one spleen per scan: a real second spleen would be erased.
 """
 
 import argparse
@@ -21,6 +25,7 @@ import numpy as np
 import torch
 from monai import transforms as mt
 from monai.data import MetaTensor
+from scipy import ndimage
 
 from spleenseg.config import TrainConfig
 from spleenseg.data import DEFAULT_DATASET_DIR, DEFAULT_SPLIT_FILE, case_dicts
@@ -53,7 +58,22 @@ def save_on_original_grid(
     nib.save(out, str(out_path))
 
 
-def predict(run_dir: Path, image_paths: list[Path], out_dir: Path, device: torch.device) -> None:
+def keep_largest_piece(mask: np.ndarray) -> np.ndarray:
+    """Erase every piece of a 3D mask except the largest; voxels touching by a corner count."""
+    pieces, n = ndimage.label(mask, structure=np.ones((3, 3, 3)))
+    if n <= 1:  # empty or already one piece
+        return mask
+    largest = np.bincount(pieces.ravel())[1:].argmax() + 1  # [1:] skips the background
+    return (pieces == largest).astype(mask.dtype)
+
+
+def predict(
+    run_dir: Path,
+    image_paths: list[Path],
+    out_dir: Path,
+    device: torch.device,
+    keep_all_pieces: bool = False,
+) -> None:
     # Rebuild the model from the run's own record, not from today's config file.
     raw = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))["config"]
     cfg = TrainConfig(**raw)
@@ -68,7 +88,10 @@ def predict(run_dir: Path, image_paths: list[Path], out_dir: Path, device: torch
         data = pipeline({"image": str(image_path)})
         # [None] adds the batch axis; a plain tensor in gives a plain tensor out.
         mask = segment(model, data["image"].as_tensor()[None], cfg.patch_size, device, use_amp)
-        save_on_original_grid(mask[0], data, pipeline, image_path, out_dir / image_path.name)
+        mask = mask[0].cpu()  # (1, X, Y, Z)
+        if not keep_all_pieces:
+            mask = torch.from_numpy(keep_largest_piece(mask[0].numpy()))[None]
+        save_on_original_grid(mask, data, pipeline, image_path, out_dir / image_path.name)
         print(f"{image_path.name}: saved")
 
 
@@ -78,13 +101,17 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--dataset-dir", type=Path, default=DEFAULT_DATASET_DIR)
     parser.add_argument("--split-file", type=Path, default=DEFAULT_SPLIT_FILE)
     parser.add_argument("--out-dir", type=Path, help="default: outputs/predictions/<run name>")
+    parser.add_argument(
+        "--keep-all-pieces", action="store_true", help="skip the largest-piece step (to measure it)"
+    )
     args = parser.parse_args(argv)
 
     # case_dicts refuses the test split: the test set stays closed until both models are trained.
     cases = case_dicts(args.split_file, args.dataset_dir, "val")
     out_dir = args.out_dir or Path("outputs/predictions") / args.run_dir.name
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    predict(args.run_dir, [Path(c["image"]) for c in cases], out_dir, device)
+    images = [Path(c["image"]) for c in cases]
+    predict(args.run_dir, images, out_dir, device, args.keep_all_pieces)
     print(f"Saved to {out_dir}")
 
 
