@@ -28,6 +28,7 @@ import torch
 from monai.data import CacheDataset, DataLoader
 from monai.inferers import sliding_window_inference
 from monai.losses import DiceCELoss
+from monai.networks.nets import UNet
 from monai.utils import set_determinism
 from torch import nn
 
@@ -44,6 +45,18 @@ CACHE_THREADS = 4  # threads that preprocess every case once, before training st
 def build_model(cfg: TrainConfig) -> nn.Module:
     if cfg.architecture == "unet3d":
         return UNet3D(cfg.channels)
+    if cfg.architecture == "monai_unet":
+        # MONAI's reference U-Net for this task: residual units, strided convolutions instead
+        # of pooling. Instance norm, as in the baseline: batch statistics are unreliable here.
+        return UNet(
+            spatial_dims=3,
+            in_channels=1,
+            out_channels=2,
+            channels=cfg.channels,
+            strides=[2] * (len(cfg.channels) - 1),  # halve the size between levels
+            num_res_units=2,
+            norm="instance",
+        )
     raise ValueError(f"Unknown architecture {cfg.architecture!r}")
 
 
