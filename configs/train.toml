@@ -18,3 +18,7 @@ amp = true                     # mixed precision on GPU; always off on CPU
 [models.baseline]
 architecture = "unet3d"        # src/spleenseg/model.py
 channels = [16, 32, 64, 128]
+
+[models.monai_unet]
+architecture = "monai_unet"    # MONAI's U-Net with residual units, see src/spleenseg/train.py
+channels = [16, 32, 64, 128, 256]
