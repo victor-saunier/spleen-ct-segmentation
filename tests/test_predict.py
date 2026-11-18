@@ -18,7 +18,7 @@ from test_train import TINY
 
 from spleenseg.evaluate import evaluate_case
 from spleenseg.model import UNet3D
-from spleenseg.predict import main, save_on_original_grid
+from spleenseg.predict import keep_largest_piece, main, save_on_original_grid
 from spleenseg.transforms import preprocessing
 
 # Voxel axis 0 runs along physical y, axis 1 along -x: not RAS, so Orientationd must work.
@@ -85,6 +85,22 @@ def test_a_mask_on_the_wrong_grid_is_refused(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="grid"):
         save_on_original_grid(torch.zeros_like(data["image"]), data, pipeline, other, out)
     assert not out.exists()
+
+
+def test_only_the_largest_piece_is_kept() -> None:
+    mask = np.zeros((20, 20, 20), dtype=np.uint8)
+    mask[2:8, 2:8, 2:8] = 1  # the spleen: 216 voxels
+    mask[8, 8, 8] = 1  # touches the spleen by a corner only: same piece
+    mask[15:17, 15:17, 15:17] = 1  # a far false blob: 8 voxels
+    kept = keep_largest_piece(mask)
+    assert kept.dtype == mask.dtype
+    assert kept.sum() == 217
+    assert kept[15:17, 15:17, 15:17].sum() == 0
+
+
+def test_an_empty_mask_stays_empty() -> None:
+    empty = np.zeros((5, 5, 5), dtype=np.uint8)
+    assert not keep_largest_piece(empty).any()
 
 
 def test_predict_writes_one_mask_per_validation_case(tmp_path: Path) -> None:
