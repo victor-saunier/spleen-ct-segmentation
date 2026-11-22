@@ -1,0 +1,9 @@
+# Allow-list: send Docker only the files the image needs. Everything else (data/, outputs/,
+# .venv/, .git/, notes) never reaches the build, so no CT data or model weights can end up in it.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!src/
+**/__pycache__
