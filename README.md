@@ -49,8 +49,12 @@ spleen. This is binary semantic segmentation.
   checkpoint. Budget and batch were fixed from measured speed and GPU memory, not from
   validation scores. The baseline trains in about 66 min on a laptop RTX 4060 (8 GB). See
   [decision record 0004](docs/decisions/0004-training-protocol.md).
+- **Second model:** MONAI's U-Net with residual units (4.8 M weights), trained with exactly the
+  same settings; about 40 min and 4 times less GPU memory than the baseline. See
+  [decision record 0005](docs/decisions/0005-second-model-and-post-processing.md).
 - **Prediction:** from the image only; the mask is put back on the scan's original grid by
-  undoing the preprocessing, then evaluated there.
+  undoing the preprocessing, then evaluated there. Only the largest connected piece is kept, for
+  both models: every training label is one piece. This assumes one spleen per scan.
 - **Evaluation:** per case, at the original resolution: Dice (overlap) and HD95 (95th-percentile
   border distance in mm, MONAI's definition). Mean, standard deviation and a 95 % percentile
   bootstrap interval; models are compared with a bootstrap of their per-case differences. An
@@ -70,6 +74,7 @@ uv run python -m spleenseg.split      # rewrites splits/split.json; must equal t
 uv run python -m spleenseg.stats      # training-set statistics behind the preprocessing choices
 uv run python -m spleenseg.preview    # outputs/preview_<case>.png, one training case
 uv run python -m spleenseg.train --model baseline --power-note "plugged in"   # ~1 h on GPU
+uv run python -m spleenseg.train --model monai_unet --power-note "plugged in" # ~40 min on GPU
 uv run python -m spleenseg.predict --run-dir outputs/runs/<run>   # validation cases
 uv run python -m spleenseg.evaluate --pred-dir outputs/predictions/<run>   # validation by default
 uv run pytest                         # data checks run only when data/ is present
