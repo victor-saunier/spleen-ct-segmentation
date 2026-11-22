@@ -1,11 +1,14 @@
 # CI: on every pull request and every push to main, install the project on a clean Linux
 # machine and run all the checks. Branch protection on main requires this job to pass.
+# CD: pushing a version tag (v1.2.3) runs the same checks, then publishes the image and a
+# GitHub Release (job "publish"). Nothing is published from pull requests or main.
 name: CI
 
 on:
   pull_request:
   push:
     branches: [main]
+    tags: ["v*"]
 
 # The token GitHub gives this workflow can only read the repository (least privilege).
 permissions:
@@ -73,3 +76,48 @@ jobs:
           # Turns on tests/test_docker.py: the container must predict the same mask as the code.
           SPLEENSEG_DOCKER_IMAGE: spleenseg:ci
         run: uv run pytest
+
+  publish:
+    # Only for a version tag, and only once every check passed on that same commit.
+    needs: checks
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Write rights only here, never in the checks job that runs on pull requests.
+    permissions:
+      contents: write # create the GitHub Release
+      packages: write # push the image to ghcr.io
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Rebuilt from the tagged commit on a fresh machine: the locked libraries and the base
+      # images pinned by digest give the same contents as the image the checks job tested.
+      # Plain docker login with the workflow's own token: no third-party action to trust.
+      - name: Build and push the image, create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_REF_NAME#v}"
+          docker build --label "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" -t "$image" .
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"
+          docker logout ghcr.io
+          # The digest names this exact content; the tag is only a name that could be moved.
+          pinned=$(docker inspect --format '{{index .RepoDigests 0}}' "$image")
+          case "$GITHUB_REF_NAME" in v0.*) pre="--prerelease" ;; *) pre="" ;; esac
+          cat > notes.md <<NOTES
+          Research / portfolio project. **NOT a medical device**: not validated for clinical use.
+
+          Docker image (CPU), by tag and by exact content:
+
+              docker pull ${image}
+              docker pull ${pinned}
+
+          The image holds no model weights and no data: mount a model folder and your scans, see
+          "Run with Docker" in the README. No model file is released (decision record 0009).
+          NOTES
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag $pre \
+            --title "$GITHUB_REF_NAME" --notes-file notes.md
