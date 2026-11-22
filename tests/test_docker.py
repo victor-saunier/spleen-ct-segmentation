@@ -44,8 +44,9 @@ def test_the_image_predicts_the_same_mask_as_the_code(tmp_path: Path) -> None:
     docker_out.mkdir()
     # On Linux a mounted folder belongs to a user number; the image's user (1000) may not be
     # the one running the tests, so run the container as the current user. Docker Desktop on
-    # Windows does not need it.
-    user: list[str] = []
+    # Windows needs none, so use a number unknown to the image there too: running as a user
+    # without a name once crashed the image on Linux only.
+    user = ["--user", "1234:1234"]
     if sys.platform != "win32":
         user = ["--user", f"{os.getuid()}:{os.getgid()}"]
     mounts = [f"{scan.parent}:/work/in:ro", f"{run_dir}:/work/model:ro", f"{docker_out}:/work/out"]

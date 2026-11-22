@@ -32,7 +32,11 @@ FROM python:3.12-slim-trixie@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65
 # Run as an ordinary user, not root: fewer rights if anything goes wrong inside the container.
 RUN useradd --create-home spleenseg
 COPY --from=build /app/.venv /app/.venv
-ENV PATH="/app/.venv/bin:$PATH"
+# USER: MONAI asks for the user's name when imported. Python reads it from this variable first;
+# without it, `docker run --user <number>` (needed on Linux hosts) crashes: that number has no
+# name inside the image. Such a user also has no home folder, so matplotlib (imported by MONAI)
+# gets a writable settings folder in /tmp instead of printing a "Permission denied" warning.
+ENV PATH="/app/.venv/bin:$PATH" USER=spleenseg MPLCONFIGDIR=/tmp/matplotlib
 USER spleenseg
 WORKDIR /work
 
