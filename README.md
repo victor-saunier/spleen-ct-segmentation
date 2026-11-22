@@ -144,6 +144,12 @@ Measured on the laptop (Windows, Docker Desktop): 450 MB compressed (2.03 GB on 
 21 s for one validation scan on the CPU, and a mask identical voxel for voxel to the one
 predicted without Docker. See [decision record 0008](docs/decisions/0008-docker-image.md).
 
+Released versions are also published to the GitHub container registry, so the build step can be
+replaced by `docker pull`: each release page gives the exact image name and digest. No trained
+model is released (licence of models trained on CC BY-SA data, see
+[decision record 0009](docs/decisions/0009-releases.md)), so a model folder must still be
+mounted.
+
 ## Reproduce
 
 ```bash
