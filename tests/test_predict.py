@@ -17,6 +17,7 @@ import torch
 from test_train import TINY
 
 from spleenseg.evaluate import evaluate_case
+from spleenseg.export import export
 from spleenseg.model import UNet3D
 from spleenseg.predict import keep_largest_piece, main, save_on_original_grid
 from spleenseg.transforms import preprocessing
@@ -148,3 +149,29 @@ def test_real_validation_label_survives_the_round_trip(case: str, tmp_path: Path
     scores = evaluate_case(out, label)
     print(f"{case}: round-trip Dice {scores['dice']:.4f}")
     assert scores["dice"] > ROUND_TRIP_MIN_DICE
+
+
+def test_onnx_gives_the_same_masks_as_pytorch(tmp_path: Path) -> None:
+    dataset_dir = tmp_path / "Task09_Spleen"
+    _write_case(dataset_dir, "spleen_2")
+    split = tmp_path / "split.json"
+    split.write_text(json.dumps({"train": [], "val": ["spleen_2"], "test": []}))
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    cfg = replace(TINY, amp=False)
+    (run_dir / "summary.json").write_text(json.dumps({"config": asdict(cfg), "git_commit": "x"}))
+    torch.manual_seed(0)
+    torch.save(UNet3D(cfg.channels).state_dict(), run_dir / "best.pt")
+    export(run_dir, tmp_path / "model.onnx")
+
+    common = ["--dataset-dir", str(dataset_dir), "--split-file", str(split), "--keep-all-pieces"]
+    main(["--run-dir", str(run_dir), "--out-dir", str(tmp_path / "torch"), *common])
+    main(["--onnx", str(tmp_path / "model.onnx"), "--out-dir", str(tmp_path / "onnx"), *common])
+
+    masks = [
+        np.asanyarray(nib.Nifti1Image.from_filename(tmp_path / d / "spleen_2.nii.gz").dataobj)
+        for d in ("torch", "onnx")
+    ]
+    assert 0.05 < masks[0].mean() < 0.95  # both classes present: two empty masks prove nothing
+    # Rounding can flip a voxel whose two scores are almost tied, so "equal" means nearly all.
+    assert (masks[0] == masks[1]).mean() > 0.999

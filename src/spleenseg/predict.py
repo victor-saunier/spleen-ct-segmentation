@@ -4,6 +4,9 @@ Usage:
     uv run python -m spleenseg.predict --run-dir outputs/runs/<model>-<date>-<time>
     uv run python -m spleenseg.evaluate --pred-dir outputs/predictions/<model>-<date>-<time>
 
+`--onnx outputs/onnx/<run>.onnx` runs an exported network with ONNX Runtime on the CPU instead
+of PyTorch, through exactly the same steps.
+
 `--split test` predicts the test cases instead: only for the single, pre-registered final
 evaluation (docs/decisions/0006-test-evaluation.md).
 
@@ -19,12 +22,13 @@ assumes one spleen per scan: a real second spleen would be erased.
 
 import argparse
 import json
-from collections.abc import Hashable, Mapping
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import nibabel as nib
 import numpy as np
+import onnxruntime as ort
 import torch
 from monai import transforms as mt
 from monai.data import MetaTensor
@@ -82,22 +86,34 @@ def load_run(run_dir: Path, device: torch.device) -> tuple[nn.Module, TrainConfi
     return model, cfg
 
 
+def onnx_predictor(
+    onnx_path: Path,
+) -> tuple[Callable[[torch.Tensor], torch.Tensor], tuple[int, ...]]:
+    """An exported network as a function on windows, and the window size stored in its graph."""
+    session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+    patch_size = tuple(session.get_inputs()[0].shape[2:])  # ("batch", 1, 96, 96, 96) -> 96^3
+
+    def run(windows: torch.Tensor) -> torch.Tensor:
+        return torch.from_numpy(session.run(None, {"image": windows.cpu().numpy()})[0])
+
+    return run, patch_size
+
+
 def predict(
-    run_dir: Path,
+    model: Callable[[torch.Tensor], torch.Tensor],
+    patch_size: Sequence[int],
     image_paths: list[Path],
     out_dir: Path,
     device: torch.device,
+    use_amp: bool = False,
     keep_all_pieces: bool = False,
 ) -> None:
-    model, cfg = load_run(run_dir, device)
-    use_amp = cfg.amp and device.type == "cuda"
-
     pipeline = preprocessing(keys=("image",))
     out_dir.mkdir(parents=True, exist_ok=True)
     for image_path in image_paths:
         data = pipeline({"image": str(image_path)})
         # [None] adds the batch axis; a plain tensor in gives a plain tensor out.
-        mask = segment(model, data["image"].as_tensor()[None], cfg.patch_size, device, use_amp)
+        mask = segment(model, data["image"].as_tensor()[None], patch_size, device, use_amp)
         mask = mask[0].cpu()  # (1, X, Y, Z)
         if not keep_all_pieces:
             mask = torch.from_numpy(keep_largest_piece(mask[0].numpy()))[None]
@@ -107,7 +123,9 @@ def predict(
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--run-dir", type=Path, required=True, help="has best.pt, summary.json")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--run-dir", type=Path, help="has best.pt, summary.json")
+    source.add_argument("--onnx", type=Path, help="exported network, run on the CPU")
     parser.add_argument("--dataset-dir", type=Path, default=DEFAULT_DATASET_DIR)
     parser.add_argument("--split-file", type=Path, default=DEFAULT_SPLIT_FILE)
     parser.add_argument("--split", choices=["val", "test"], default="val")
@@ -119,17 +137,24 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    out_dir = args.out_dir or Path("outputs/predictions") / args.run_dir.name
+    name = args.onnx.stem + "-onnx" if args.onnx else args.run_dir.name
+    out_dir = args.out_dir or Path("outputs/predictions") / name
     if args.split == "test":
         # Deliberately not case_dicts: it keeps the test set out of all training code, and
         # still refuses it. The test set is opened here, on explicit request only.
         cases = json.loads(args.split_file.read_text(encoding="utf-8"))["test"]
         images = [args.dataset_dir / "imagesTr" / f"{case}.nii.gz" for case in cases]
-        out_dir = args.out_dir or Path("outputs/predictions/test") / args.run_dir.name
+        out_dir = args.out_dir or Path("outputs/predictions/test") / name
     else:
         images = [Path(c["image"]) for c in case_dicts(args.split_file, args.dataset_dir, "val")]
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    predict(args.run_dir, images, out_dir, device, args.keep_all_pieces)
+    if args.onnx:
+        model, patch_size = onnx_predictor(args.onnx)
+        device, use_amp = torch.device("cpu"), False
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model, cfg = load_run(args.run_dir, device)
+        patch_size, use_amp = cfg.patch_size, cfg.amp and device.type == "cuda"
+    predict(model, patch_size, images, out_dir, device, use_amp, args.keep_all_pieces)
     print(f"Saved to {out_dir}")
 
 
