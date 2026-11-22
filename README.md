@@ -7,8 +7,9 @@
 
 ## Status
 
-Work in progress. This README only reports numbers produced by real runs. Results will be
-reported on the test set, once, after both models are trained.
+Both models are trained and were evaluated once on the held-out test set (Results below).
+Deployment work (ONNX export, Docker) is in progress. This README only reports numbers produced
+by real runs.
 
 ## Problem
 
@@ -63,7 +64,41 @@ spleen. This is binary semantic segmentation.
 
 ## Results
 
-None yet.
+**Test set:** 7 cases never read before this evaluation, scored once for both models, with a
+procedure committed and pushed beforehand
+([decision record 0006](docs/decisions/0006-test-evaluation.md)). Scores are per case at the
+original resolution, with only the largest connected piece kept, then averaged.
+
+| Model | Weights | Training (5000 steps) | Mean Dice [95 % interval] | Mean HD95 [95 % interval] |
+|---|---|---|---|---|
+| Baseline: own 3D U-Net | 1.4 M | 66 min, 4.17 GB GPU memory | 0.950 [0.936, 0.963] | 4.0 mm [1.9, 7.2] |
+| MONAI U-Net, residual units | 4.8 M | 40 min, 1.05 GB GPU memory | 0.935 [0.907, 0.954] | 5.3 mm [3.1, 7.8] |
+
+Hardware: laptop NVIDIA RTX 4060 (8 GB), mixed precision, plugged in. Intervals: percentile
+bootstrap of the mean, 10,000 resamples.
+
+**Main comparison (pre-registered):** the per-case Dice difference, MONAI U-Net minus baseline,
+is -0.015 [-0.029, -0.006]. The interval is entirely below 0: **the baseline scored higher than
+the MONAI U-Net on these 7 test cases** (higher on 6 of 7). For HD95 the difference is +1.3 mm
+[-0.2, +2.9]: no detectable difference. On the validation set the two models showed no
+detectable difference; the test set decides.
+
+**Post-processing:** without the largest-piece step, mean HD95 on the test set would be 19.5 mm
+(baseline) and 32.1 mm (MONAI U-Net), because of small false pieces far from the spleen.
+
+**Error analysis** (the 3 lowest-Dice test cases, the same for both models, looked at on the CT):
+
+- spleen_44, a small spleen (119 mL) on 10 slices of 5 mm: the MONAI U-Net under-segments it
+  (101 mL predicted, 24 mL missed), most clearly near one end of the spleen. The baseline gets
+  the volume right but leaks into neighbouring tissue on one slice.
+- spleen_41: both models extend into a loop of bowel (likely the colon) that touches the tip of
+  the spleen, up to 35 mm outside it. Because it touches the spleen, the largest-piece step cannot
+  remove it.
+- spleen_21: border disagreements only, with a median error under 1 mm.
+
+**How to read these numbers:** 7 test cases give wide uncertainty, and with so few cases the
+percentile bootstrap interval is even too narrow. Each model was trained once, with one seed, so
+part of the difference could come from training randomness. The split is case-level (see Data).
 
 ## Reproduce
 
@@ -77,6 +112,8 @@ uv run python -m spleenseg.train --model baseline --power-note "plugged in"   # 
 uv run python -m spleenseg.train --model monai_unet --power-note "plugged in" # ~40 min on GPU
 uv run python -m spleenseg.predict --run-dir outputs/runs/<run>   # validation cases
 uv run python -m spleenseg.evaluate --pred-dir outputs/predictions/<run>   # validation by default
+uv run python -m spleenseg.compare --a outputs/eval/<run A>-val --b outputs/eval/<run B>-val
+# Test set: the exact, once-only commands are in docs/decisions/0006-test-evaluation.md
 uv run pytest                         # data checks run only when data/ is present
 ```
 
@@ -84,7 +121,15 @@ uv run pytest                         # data checks run only when data/ is prese
 
 - **Case-level split:** separating patients cannot be guaranteed (see Data above). If some
   cases are repeat scans of one person, test scores could be optimistic.
-- More to be written as results come in.
+- **Small test set:** 7 cases from one hospital and one contrast phase. Nothing here shows how
+  the models behave on other scanners, hospitals or patients.
+- **One training run per model:** no measure of how much results vary between runs.
+- **The two models differ in several ways at once** (depth, residual units, downsampling,
+  activation): the comparison cannot say which difference matters.
+- **One spleen per scan is assumed:** the largest-piece step would erase a real second spleen.
+- **Leaks into touching organs** (such as bowel against the spleen tip) are not removed by the
+  post-processing.
+- **Not a medical device:** not validated for any clinical use.
 
 ## License
 
