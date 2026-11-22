@@ -8,8 +8,8 @@
 ## Status
 
 Both models are trained and were evaluated once on the held-out test set (Results below).
-The baseline is exported to ONNX (below); Docker packaging is in progress. This README only reports numbers produced
-by real runs.
+The baseline is exported to ONNX and prediction runs in a Docker image (below). This README only
+reports numbers produced by real runs.
 
 ## Problem
 
@@ -119,6 +119,30 @@ plugged in):
 ONNX Runtime is slower than PyTorch on this CPU: the export is for portability, not speed.
 Preprocessing and the sliding window still use MONAI and PyTorch. See
 [decision record 0007](docs/decisions/0007-onnx-export.md).
+
+## Run with Docker
+
+A CPU image runs `spleenseg.predict` with the same locked libraries on any machine with Docker.
+The image holds no data and no model weights: the scans, a model folder (`best.pt` +
+`summary.json` from a training run) and an output folder are mounted when it starts.
+
+```bash
+docker build -t spleenseg .
+docker run --rm \
+  -v "$PWD/scans:/work/in:ro" \
+  -v "$PWD/outputs/runs/<run>:/work/model:ro" \
+  -v "$PWD/masks:/work/out" \
+  spleenseg --run-dir /work/model --image /work/in/<scan>.nii.gz --out-dir /work/out
+```
+
+Each `-v host:container` mounts a folder of this computer into the container; `:ro` makes it
+read-only. The mask is written to `masks/`, on the scan's original grid. On Linux, add
+`--user "$(id -u):$(id -g)"` if the container cannot write to the output folder. In Git Bash on
+Windows, start the command with `MSYS_NO_PATHCONV=1` so the container paths are not rewritten.
+
+Measured on the laptop (Windows, Docker Desktop): 450 MB compressed (2.03 GB on disk), about
+21 s for one validation scan on the CPU, and a mask identical voxel for voxel to the one
+predicted without Docker. See [decision record 0008](docs/decisions/0008-docker-image.md).
 
 ## Reproduce
 
