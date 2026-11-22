@@ -175,3 +175,20 @@ def test_onnx_gives_the_same_masks_as_pytorch(tmp_path: Path) -> None:
     assert 0.05 < masks[0].mean() < 0.95  # both classes present: two empty masks prove nothing
     # Rounding can flip a voxel whose two scores are almost tied, so "equal" means nearly all.
     assert (masks[0] == masks[1]).mean() > 0.999
+
+
+def test_predict_reads_the_scan_files_it_is_given(tmp_path: Path) -> None:
+    # No split file at all: the scans are named on the command line, as in the Docker image.
+    paths = [_write_case(tmp_path / "data", case)["imagesTr"] for case in ("a", "b")]
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    cfg = replace(TINY, amp=False)
+    (run_dir / "summary.json").write_text(json.dumps({"config": asdict(cfg)}))
+    torch.save(UNet3D(cfg.channels).state_dict(), run_dir / "best.pt")
+
+    out_dir = tmp_path / "masks"
+    main(["--run-dir", str(run_dir), "--image", *map(str, paths), "--out-dir", str(out_dir)])
+
+    assert sorted(p.name for p in out_dir.iterdir()) == ["a.nii.gz", "b.nii.gz"]
+    for path in paths:
+        evaluate_case(out_dir / path.name, path.parent.parent / "labelsTr" / path.name)
