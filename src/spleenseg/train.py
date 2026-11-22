@@ -18,7 +18,7 @@ import csv
 import json
 import platform
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -62,7 +62,7 @@ def build_model(cfg: TrainConfig) -> nn.Module:
 
 @torch.no_grad()  # no gradients when only predicting: faster, less memory
 def segment(
-    model: nn.Module,
+    model: Callable[[torch.Tensor], torch.Tensor],
     images: torch.Tensor,
     patch_size: Sequence[int],
     device: torch.device,
@@ -71,7 +71,8 @@ def segment(
     """Predicted class of every voxel, (batch, 1, X, Y, Z), for whole preprocessed volumes.
 
     Shared by checkpoint selection and predict.py, so both always predict the same way.
-    The model must already be in eval mode.
+    `model` is a PyTorch model already in eval mode, or any function with the same input and
+    output, such as an ONNX Runtime session wrapped by predict.onnx_predictor.
     """
     with torch.autocast(device.type, enabled=use_amp):
         # The whole volume is too big for one pass: predict overlapping windows and blend them.
