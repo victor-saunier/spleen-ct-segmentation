@@ -8,7 +8,7 @@
 ## Status
 
 Both models are trained and were evaluated once on the held-out test set (Results below).
-Deployment work (ONNX export, Docker) is in progress. This README only reports numbers produced
+The baseline is exported to ONNX (below); Docker packaging is in progress. This README only reports numbers produced
 by real runs.
 
 ## Problem
@@ -100,6 +100,26 @@ detectable difference; the test set decides.
 percentile bootstrap interval is even too narrow. Each model was trained once, with one seed, so
 part of the difference could come from training randomness. The split is case-level (see Data).
 
+## Deployment: ONNX export
+
+The baseline network is exported to a single 5.69 MB ONNX file that ONNX Runtime can run
+without PyTorch; it was chosen because it scored higher on the test set. On the 7 validation
+cases its masks differ from PyTorch's (both on the CPU) by 14 voxels out of about 590,000 spleen
+voxels: near-ties decided by rounding. Dice is unchanged to 4 decimals in 6 of 7 cases.
+
+Speed on one validation scan (median of 5 runs after warm-up, laptop i9-13900HX + RTX 4060,
+plugged in):
+
+| Backend | One 96^3 window | Whole scan |
+|---|---|---|
+| PyTorch, GPU | 0.016 s | 0.75 s |
+| PyTorch, CPU | 0.24 s | 13.7 s |
+| ONNX Runtime, CPU | 0.34 s | 36.3 s |
+
+ONNX Runtime is slower than PyTorch on this CPU: the export is for portability, not speed.
+Preprocessing and the sliding window still use MONAI and PyTorch. See
+[decision record 0007](docs/decisions/0007-onnx-export.md).
+
 ## Reproduce
 
 ```bash
@@ -113,6 +133,9 @@ uv run python -m spleenseg.train --model monai_unet --power-note "plugged in" # 
 uv run python -m spleenseg.predict --run-dir outputs/runs/<run>   # validation cases
 uv run python -m spleenseg.evaluate --pred-dir outputs/predictions/<run>   # validation by default
 uv run python -m spleenseg.compare --a outputs/eval/<run A>-val --b outputs/eval/<run B>-val
+uv run python -m spleenseg.export --run-dir outputs/runs/<run>      # outputs/onnx/<run>.onnx
+uv run python -m spleenseg.predict --onnx outputs/onnx/<run>.onnx   # same steps, ONNX Runtime
+uv run python -m spleenseg.benchmark --run-dir outputs/runs/<run> --onnx outputs/onnx/<run>.onnx --power-note "plugged in"
 # Test set: the exact, once-only commands are in docs/decisions/0006-test-evaluation.md
 uv run pytest                         # data checks run only when data/ is present
 ```
