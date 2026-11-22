@@ -9,7 +9,8 @@
 
 Both models are trained and were evaluated once on the held-out test set (Results below).
 The baseline is exported to ONNX and prediction runs in a Docker image (below). This README only
-reports numbers produced by real runs.
+reports numbers produced by real runs. What the model is for, and not for, is summarised in the
+[model card](MODEL_CARD.md).
 
 ## Problem
 
@@ -149,6 +150,15 @@ replaced by `docker pull`: each release page gives the exact image name and dige
 model is released (licence of models trained on CC BY-SA data, see
 [decision record 0009](docs/decisions/0009-releases.md)), so a model folder must still be
 mounted.
+
+## Engineering
+
+- **Every pull request** ([CI workflow](.github/workflows/ci.yml)): secret scan of the whole git
+  history, locked install, lint, format, type check, tests, and the Docker image built and
+  required to predict the same mask as the code.
+- **Every version tag** (`v1.2.3`): the same checks, then the image is published and a GitHub
+  Release names it by tag and digest ([decision record 0009](docs/decisions/0009-releases.md)).
+- Decisions, with the options rejected, are kept in [docs/decisions](docs/decisions).
 
 ## Reproduce
 

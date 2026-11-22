@@ -31,5 +31,7 @@ from a commit that passed every check.
   `git push origin v1.2.3`. A tag pushed by mistake publishes, so tags are pushed by hand only.
 - Users of the image must bring their own trained model folder: without released weights, the
   image alone cannot predict. This is the main limit of the release.
-- The repository is private until the project is finished; who can pull the image depends on
-  the package's visibility on GitHub, checked after the first release.
+- The repository is private until the project is finished. Checked after the first release
+  (v0.1.0, a pre-release that tests this pipeline): the package is private and linked to the
+  repository, and a pull without login is refused. Pulled by digest, the published image
+  predicted the same mask as the code on validation case spleen_16 (0 voxels differ).
