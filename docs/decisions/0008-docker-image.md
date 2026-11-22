@@ -48,4 +48,6 @@ Laptop i9-13900HX, Windows 11, Docker Desktop (engine 29.9.3), plugged in.
   its own equivalence proof.
 - On a Linux host, the container's user may not be allowed to write into the mounted output
   folder; running with `--user "$(id -u):$(id -g)"` fixes that. Tested on Windows only.
-- Only checked on one validation scan, on one machine. Running the image in CI is T10.
+- Real data: checked on one validation scan, on one machine. Since T10, CI builds the image on
+  every pull request and requires its mask to equal `predict.py`'s on a synthetic scan with
+  random weights (`tests/test_docker.py`), on Linux with `--user`.
