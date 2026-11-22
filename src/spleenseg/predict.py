@@ -4,6 +4,9 @@ Usage:
     uv run python -m spleenseg.predict --run-dir outputs/runs/<model>-<date>-<time>
     uv run python -m spleenseg.evaluate --pred-dir outputs/predictions/<model>-<date>-<time>
 
+`--split test` predicts the test cases instead: only for the single, pre-registered final
+evaluation (docs/decisions/0006-test-evaluation.md).
+
 Only the image is read: the label never touches prediction. The model predicts on the
 preprocessed grid; the mask is then put back on the scan's own grid by undoing the geometric
 preprocessing steps (crop, resampling, orientation) in reverse order, and saved with the scan's
@@ -100,17 +103,25 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--run-dir", type=Path, required=True, help="has best.pt, summary.json")
     parser.add_argument("--dataset-dir", type=Path, default=DEFAULT_DATASET_DIR)
     parser.add_argument("--split-file", type=Path, default=DEFAULT_SPLIT_FILE)
-    parser.add_argument("--out-dir", type=Path, help="default: outputs/predictions/<run name>")
+    parser.add_argument("--split", choices=["val", "test"], default="val")
+    parser.add_argument(
+        "--out-dir", type=Path, help="default: outputs/predictions/[test/]<run name>"
+    )
     parser.add_argument(
         "--keep-all-pieces", action="store_true", help="skip the largest-piece step (to measure it)"
     )
     args = parser.parse_args(argv)
 
-    # case_dicts refuses the test split: the test set stays closed until both models are trained.
-    cases = case_dicts(args.split_file, args.dataset_dir, "val")
     out_dir = args.out_dir or Path("outputs/predictions") / args.run_dir.name
+    if args.split == "test":
+        # Deliberately not case_dicts: it keeps the test set out of all training code, and
+        # still refuses it. The test set is opened here, on explicit request only.
+        cases = json.loads(args.split_file.read_text(encoding="utf-8"))["test"]
+        images = [args.dataset_dir / "imagesTr" / f"{case}.nii.gz" for case in cases]
+        out_dir = args.out_dir or Path("outputs/predictions/test") / args.run_dir.name
+    else:
+        images = [Path(c["image"]) for c in case_dicts(args.split_file, args.dataset_dir, "val")]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    images = [Path(c["image"]) for c in cases]
     predict(args.run_dir, images, out_dir, device, args.keep_all_pieces)
     print(f"Saved to {out_dir}")
 

@@ -103,12 +103,13 @@ def test_an_empty_mask_stays_empty() -> None:
     assert not keep_largest_piece(empty).any()
 
 
-def test_predict_writes_one_mask_per_validation_case(tmp_path: Path) -> None:
+def _predict_split(tmp_path: Path, split_ids: dict[str, list[str]], *extra: str) -> list[str]:
+    """Run predict.py's command on a fake run folder; return the names of the written files."""
     dataset_dir = tmp_path / "Task09_Spleen"
-    _write_case(dataset_dir, "spleen_2")
+    for case in ("spleen_2", "spleen_3"):
+        _write_case(dataset_dir, case)
     split = tmp_path / "split.json"
-    # spleen_99 has no file at all: if the code ever read the test set, this test would crash.
-    split.write_text(json.dumps({"train": [], "val": ["spleen_2"], "test": ["spleen_99"]}))
+    split.write_text(json.dumps({"train": [], **split_ids}))
     # A run folder as train.py leaves it: untrained weights are enough to test the wiring.
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -117,11 +118,24 @@ def test_predict_writes_one_mask_per_validation_case(tmp_path: Path) -> None:
     torch.save(UNet3D(cfg.channels).state_dict(), run_dir / "best.pt")
 
     out_dir = tmp_path / "preds"
-    args = ["--run-dir", str(run_dir), "--dataset-dir", str(dataset_dir)]
+    args = ["--run-dir", str(run_dir), "--dataset-dir", str(dataset_dir), *extra]
     main([*args, "--split-file", str(split), "--out-dir", str(out_dir)])
+    for path in out_dir.iterdir():  # every mask is on its scan's grid
+        evaluate_case(path, dataset_dir / "labelsTr" / path.name)
+    return sorted(p.name for p in out_dir.iterdir())
 
-    assert [p.name for p in out_dir.iterdir()] == ["spleen_2.nii.gz"]
-    evaluate_case(out_dir / "spleen_2.nii.gz", dataset_dir / "labelsTr" / "spleen_2.nii.gz")
+
+def test_predict_reads_only_the_validation_cases_by_default(tmp_path: Path) -> None:
+    # spleen_99 has no file at all: if the code ever read the test set, this test would crash.
+    written = _predict_split(tmp_path, {"val": ["spleen_2"], "test": ["spleen_99"]})
+    assert written == ["spleen_2.nii.gz"]
+
+
+def test_predict_reads_the_test_cases_only_on_request(tmp_path: Path) -> None:
+    written = _predict_split(
+        tmp_path, {"val": ["spleen_99"], "test": ["spleen_3"]}, "--split", "test"
+    )
+    assert written == ["spleen_3.nii.gz"]
 
 
 @needs_data
