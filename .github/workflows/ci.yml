@@ -62,5 +62,14 @@ jobs:
       - name: Type check
         run: uv run mypy
 
+      # The image is what users run: build it from this commit with the real Dockerfile, so a
+      # broken Dockerfile or a file missing from .dockerignore fails CI. No cache: every run
+      # builds from scratch on a fresh machine.
+      - name: Build the Docker image
+        run: docker build -t spleenseg:ci .
+
       - name: Run tests
+        env:
+          # Turns on tests/test_docker.py: the container must predict the same mask as the code.
+          SPLEENSEG_DOCKER_IMAGE: spleenseg:ci
         run: uv run pytest
