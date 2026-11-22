@@ -29,6 +29,7 @@ import torch
 from monai import transforms as mt
 from monai.data import MetaTensor
 from scipy import ndimage
+from torch import nn
 
 from spleenseg.config import TrainConfig
 from spleenseg.data import DEFAULT_DATASET_DIR, DEFAULT_SPLIT_FILE, case_dicts
@@ -70,6 +71,17 @@ def keep_largest_piece(mask: np.ndarray) -> np.ndarray:
     return (pieces == largest).astype(mask.dtype)
 
 
+def load_run(run_dir: Path, device: torch.device) -> tuple[nn.Module, TrainConfig]:
+    """The trained model of a run folder, in eval mode, and the config it was trained with."""
+    # Rebuild the model from the run's own record, not from today's config file.
+    raw = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))["config"]
+    cfg = TrainConfig(**raw)
+    model = build_model(cfg).to(device)
+    model.load_state_dict(torch.load(run_dir / "best.pt", map_location=device, weights_only=True))
+    model.eval()
+    return model, cfg
+
+
 def predict(
     run_dir: Path,
     image_paths: list[Path],
@@ -77,12 +89,7 @@ def predict(
     device: torch.device,
     keep_all_pieces: bool = False,
 ) -> None:
-    # Rebuild the model from the run's own record, not from today's config file.
-    raw = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))["config"]
-    cfg = TrainConfig(**raw)
-    model = build_model(cfg).to(device)
-    model.load_state_dict(torch.load(run_dir / "best.pt", map_location=device, weights_only=True))
-    model.eval()
+    model, cfg = load_run(run_dir, device)
     use_amp = cfg.amp and device.type == "cuda"
 
     pipeline = preprocessing(keys=("image",))

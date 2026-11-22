@@ -12,6 +12,9 @@ dependencies = [
     "matplotlib>=3.11.2",
     "monai>=1.6.1",
     "nibabel>=5.5",
+    "onnx>=1.23.2",
+    "onnxruntime>=1.32.0",
+    "onnxscript>=0.7.2",
     "scipy>=1.18.1",
     "torch>=2.15",
 ]
@@ -72,8 +75,8 @@ disallow_untyped_defs = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-# SciPy ships no type information; the tests cover every call into it.
-module = ["scipy.*"]
+# SciPy and ONNX Runtime ship no type information; the tests cover every call into them.
+module = ["scipy.*", "onnxruntime.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
