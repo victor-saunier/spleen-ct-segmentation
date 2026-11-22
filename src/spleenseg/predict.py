@@ -7,6 +7,9 @@ Usage:
 `--onnx outputs/onnx/<run>.onnx` runs an exported network with ONNX Runtime on the CPU instead
 of PyTorch, through exactly the same steps.
 
+`--image a.nii.gz b.nii.gz --out-dir masks/` predicts the given scan files instead of a split,
+for example inside the Docker image.
+
 `--split test` predicts the test cases instead: only for the single, pre-registered final
 evaluation (docs/decisions/0006-test-evaluation.md).
 
@@ -128,7 +131,9 @@ def main(argv: list[str] | None = None) -> None:
     source.add_argument("--onnx", type=Path, help="exported network, run on the CPU")
     parser.add_argument("--dataset-dir", type=Path, default=DEFAULT_DATASET_DIR)
     parser.add_argument("--split-file", type=Path, default=DEFAULT_SPLIT_FILE)
-    parser.add_argument("--split", choices=["val", "test"], default="val")
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("--split", choices=["val", "test"], default="val")
+    inputs.add_argument("--image", type=Path, nargs="+", help="scan files instead of a split")
     parser.add_argument(
         "--out-dir", type=Path, help="default: outputs/predictions/[test/]<run name>"
     )
@@ -139,7 +144,9 @@ def main(argv: list[str] | None = None) -> None:
 
     name = args.onnx.stem + "-onnx" if args.onnx else args.run_dir.name
     out_dir = args.out_dir or Path("outputs/predictions") / name
-    if args.split == "test":
+    if args.image:
+        images = args.image
+    elif args.split == "test":
         # Deliberately not case_dicts: it keeps the test set out of all training code, and
         # still refuses it. The test set is opened here, on explicit request only.
         cases = json.loads(args.split_file.read_text(encoding="utf-8"))["test"]
