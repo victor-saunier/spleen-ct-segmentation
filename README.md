@@ -12,6 +12,14 @@ The baseline is exported to ONNX and prediction runs in a Docker image (below). 
 reports numbers produced by real runs. What the model is for, and not for, is summarised in the
 [model card](MODEL_CARD.md).
 
+![Two test CT slices with the reference spleen outline and the model's outline](docs/figures/test-cases.png)
+
+*The baseline on the test set: the case with the median Dice and the one with the lowest, picked
+by code from the saved scores, each on the slice where prediction and label disagree most. On
+spleen_44 the prediction leaks into neighbouring tissue. CT and labels: Medical Segmentation
+Decathlon, Task09 Spleen, CC BY-SA 4.0; cropped, windowed and outlined. This figure is
+CC BY-SA 4.0; the code that draws it (`spleenseg.figure`) is MIT.*
+
 ## Problem
 
 Given a 3D CT volume of the abdomen, predict for every voxel (3D pixel) whether it belongs to the
@@ -177,6 +185,7 @@ uv run python -m spleenseg.export --run-dir outputs/runs/<run>      # outputs/on
 uv run python -m spleenseg.predict --onnx outputs/onnx/<run>.onnx   # same steps, ONNX Runtime
 uv run python -m spleenseg.benchmark --run-dir outputs/runs/<run> --onnx outputs/onnx/<run>.onnx --power-note "plugged in"
 # Test set: the exact, once-only commands are in docs/decisions/0006-test-evaluation.md
+uv run python -m spleenseg.figure --pred-dir outputs/predictions/test/<run> --eval-dir outputs/eval/<run>-test
 uv run pytest                         # data checks run only when data/ is present
 ```
 
@@ -198,3 +207,5 @@ uv run pytest                         # data checks run only when data/ is prese
 
 - Code: MIT, see [LICENSE](LICENSE).
 - Data: CC BY-SA 4.0, owned by the dataset authors, not redistributed here.
+- Figure [docs/figures/test-cases.png](docs/figures/test-cases.png): made from two CT slices and
+  labels of the dataset, so it is shared under CC BY-SA 4.0 with the credit above.
